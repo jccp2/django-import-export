@@ -8,6 +8,7 @@ from django.contrib import admin
 from django.utils.translation import ugettext_lazy as _
 from django.conf.urls import patterns, url
 from django.template.response import TemplateResponse
+from django.template.loader import render_to_string
 from django.contrib import messages
 from django.contrib.admin.models import LogEntry, ADDITION, CHANGE, DELETION
 from django.contrib.contenttypes.models import ContentType
@@ -18,10 +19,10 @@ from .forms import (
     ImportForm,
     ConfirmImportForm,
     ExportForm,
-)
+    )
 from .resources import (
     modelresource_factory,
-)
+    )
 from .formats import base_formats
 from .results import RowResult
 
@@ -126,7 +127,7 @@ class ImportMixin(ImportExportMixinBase):
             dataset = input_format.create_dataset(data)
 
             result = resource.import_data(dataset, dry_run=False,
-                                 raise_errors=True)
+                                          raise_errors=True)
 
             # Add imported objects to LogEntry
             logentry_map = {
@@ -134,7 +135,7 @@ class ImportMixin(ImportExportMixinBase):
                 RowResult.IMPORT_TYPE_UPDATE: CHANGE,
                 RowResult.IMPORT_TYPE_DELETE: DELETION,
             }
-            content_type_id=ContentType.objects.get_for_model(self.model).pk
+            content_type_id = ContentType.objects.get_for_model(self.model).pk
             for row in result:
                 if row.import_type != row.IMPORT_TYPE_SKIP:
                     LogEntry.objects.log_action(
@@ -294,6 +295,19 @@ class ExportMixin(ImportExportMixinBase):
             queryset = self.get_export_queryset(request)
             content_type = 'application/octet-stream'
             data = resource_class().export(queryset)
+
+            if isinstance(file_format, base_formats.HTML):
+                date_str = datetime.now().strftime('%Y-%m-%d')
+                export_data = render_to_string('admin/import_export/export_html.html',
+                                               {
+                                                   'report_name': self.model.__name__,
+                                                   'report_date': date_str,
+                                                   'report_table': file_format.export_data(data)
+                                               }
+                )
+            else:
+                export_data = file_format.export_data(data)
+
             export_data = file_format.export_data(data)
             # Django 1.7 uses the content_type kwarg instead of mimetype
             try:

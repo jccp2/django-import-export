@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title></title>
+</head>
+<body>
+
+<h1>Report for {{ report_name }} at {{ report_date }}</h1>
+
+{% autoescape off %}
+
+{{ report_table }}
+
+{% endautoescape %}
+</body>
+</html>
