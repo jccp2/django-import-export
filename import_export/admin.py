@@ -303,8 +303,7 @@ class ExportMixin(ImportExportMixinBase):
                                                    'report_name': self.model.__name__,
                                                    'report_date': date_str,
                                                    'report_table': file_format.export_data(data)
-                                               }
-                )
+                                               })
             else:
                 export_data = file_format.export_data(data)
 
