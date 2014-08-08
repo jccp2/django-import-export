@@ -307,7 +307,6 @@ class ExportMixin(ImportExportMixinBase):
             else:
                 export_data = file_format.export_data(data)
 
-            export_data = file_format.export_data(data)
             # Django 1.7 uses the content_type kwarg instead of mimetype
             try:
                 response = HttpResponse(export_data, content_type=content_type)
