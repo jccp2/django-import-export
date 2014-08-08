@@ -298,7 +298,7 @@ class ExportMixin(ImportExportMixinBase):
 
             if isinstance(file_format, base_formats.HTML):
                 date_str = datetime.now().strftime('%Y-%m-%d')
-                export_data = render_to_string('admin/import_export/export_html.html',
+                export_data = render_to_string('admin/import_export/html_export.html',
                                                {
                                                    'report_name': self.model.__name__,
                                                    'report_date': date_str,
