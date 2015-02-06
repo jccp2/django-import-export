@@ -136,6 +136,10 @@ class ModelResourceTest(TestCase):
         dataset = self.resource.export(Book.objects.all())
         self.assertEqual(len(dataset), 1)
 
+    def test_export_iterable(self):
+        dataset = self.resource.export(list(Book.objects.all()))
+        self.assertEqual(len(dataset), 1)
+
     def test_get_diff(self):
         book2 = Book(name="Some other book")
         diff = self.resource.get_diff(self.book, book2)
@@ -165,14 +169,13 @@ class ModelResourceTest(TestCase):
 
         resource = AuthorResource()
         dataset = tablib.Dataset(headers=['id', 'name', 'birthday'])
-        dataset.append(['', 'A.A.Milne', '1882-01-18'])
+        dataset.append(['', 'A.A.Milne', '1882test-01-18'])
 
         result = resource.import_data(dataset, raise_errors=False)
 
         self.assertTrue(result.has_errors())
         self.assertTrue(result.rows[0].errors)
-        msg = ("Column 'birthday': time data '1882-01-18' does not match "
-            "format '%Y-%m-%d %H:%M:%S'")
+        msg = ("Column 'birthday': Enter a valid date/time.")
         actual = result.rows[0].errors[0].error
         self.assertIsInstance(actual, ValueError)
         self.assertEqual(msg, str(actual))
@@ -344,12 +347,14 @@ class ModelResourceTest(TestCase):
         class EntryResource(resources.ModelResource):
             class Meta:
                 model = Entry
-                fields = ('user__profile',)
+                fields = ('user__profile', 'user__profile__is_private')
 
         resource = EntryResource()
         dataset = resource.export(Entry.objects.all())
         self.assertEqual(dataset.dict[0]['user__profile'], profile.pk)
+        self.assertEqual(dataset.dict[0]['user__profile__is_private'], '1')
         self.assertEqual(dataset.dict[1]['user__profile'], '')
+        self.assertEqual(dataset.dict[1]['user__profile__is_private'], '')
 
     def test_empty_get_queryset(self):
         # issue #25 - Overriding queryset on export() fails when passed

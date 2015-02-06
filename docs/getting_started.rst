@@ -2,7 +2,7 @@
 Getting started
 ===============
 
-For example purposes, we'll be use simplified book app, here is our
+For example purposes, we'll use a simplified book app. Here is our
 ``core.models.py``::
 
     class Author(models.Model):
@@ -39,7 +39,7 @@ Creating import-export resource
 -------------------------------
 
 To integrate `django-import-export` with ``Book`` model, we will create
-a resource class that will describe how this resource can be imported or
+a resource class in ``admin.py`` that will describe how this resource can be imported or
 exported.
 
 ::
@@ -102,7 +102,7 @@ model relationships::
 Declaring fields
 ----------------
 
-It is possible to override a resource field to change some of it's
+It is possible to override a resource field to change some of its
 options::
 
     from import_export import fields
@@ -113,7 +113,7 @@ options::
         class Meta:
             model = Book
 
-Other fields that are not existing in the target model may be added::
+Other fields that don't exist in the target model may be added::
 
     from import_export import fields
     
@@ -226,7 +226,7 @@ that have column ``delete`` set to ``1``.
 Admin integration
 -----------------
 
-Admin integration is achived by subclassing 
+Admin integration is achived by subclassing (in ``admin.py``)
 ``ImportExportModelAdmin`` or one of the available mixins (``ImportMixin``, 
 ``ExportMixin``, or ``ImportExportMixin``)::
 
@@ -248,6 +248,27 @@ Admin integration is achived by subclassing
 .. figure:: _static/images/django-import-export-import-confirm.png
 
    A screenshot of the confirm import view.
+
+|
+
+Another approach to exporting data is by subclassing
+``ImportExportActionModelAdmin`` which implements export as an admin action.
+As a result it's possible to export a list of objects selected on the change
+list page::
+
+    from import_export.admin import ImportExportActionModelAdmin
+
+
+    class BookAdmin(ImportExportActionModelAdmin):
+        resource_class = BookResource
+        pass
+
+
+.. figure:: _static/images/django-import-export-action.png
+
+   A screenshot of the change view with Import and Export as an admin action.
+
+|
 
 .. seealso::
 

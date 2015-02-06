@@ -3,6 +3,8 @@ from __future__ import unicode_literals
 from decimal import Decimal
 from datetime import datetime
 from django.utils import datetime_safe
+from django.utils.encoding import smart_text
+from django.conf import settings
 
 try:
     from django.utils.encoding import force_text
@@ -34,18 +36,24 @@ class Widget(object):
         return force_text(value)
 
 
-class IntegerWidget(Widget):
+class NumberWidget(Widget):
+
+    def render(self, value):
+        return value
+
+
+class IntegerWidget(NumberWidget):
     """
     Widget for converting integer fields.
     """
 
     def clean(self, value):
-        if not value:
+        if not value and value is not 0:
             return None
         return int(value)
 
 
-class DecimalWidget(Widget):
+class DecimalWidget(NumberWidget):
     """
     Widget for converting decimal fields.
     """
@@ -74,12 +82,12 @@ class BooleanWidget(Widget):
 
     def render(self, value):
         if value is None:
-          return ""
+            return ""
         return self.TRUE_VALUES[0] if value else self.FALSE_VALUE
 
     def clean(self, value):
         if value == "":
-          return None
+            return None
         return True if value in self.TRUE_VALUES else False
 
 
@@ -92,19 +100,31 @@ class DateWidget(Widget):
 
     def __init__(self, format=None):
         if format is None:
-            format = "%Y-%m-%d"
-        self.format = format
+            if not settings.DATE_INPUT_FORMATS:
+                formats = ("%Y-%m-%d",)
+            else:
+                formats = settings.DATE_INPUT_FORMATS
+        else:
+            formats = (format,)
+        self.formats = formats
 
     def clean(self, value):
         if not value:
             return None
-        return datetime.strptime(value, self.format).date()
+        for format in self.formats:
+            try:
+                return datetime.strptime(value, format).date()
+            except (ValueError, TypeError):
+                continue
+        raise ValueError("Enter a valid date.")
 
     def render(self, value):
+        if not value:
+            return ""
         try:
-            return value.strftime(self.format)
+            return value.strftime(self.formats[0])
         except:
-            return datetime_safe.new_date(value).strftime(self.format)
+            return datetime_safe.new_date(value).strftime(self.formats[0])
 
 
 class DateTimeWidget(Widget):
@@ -116,38 +136,65 @@ class DateTimeWidget(Widget):
 
     def __init__(self, format=None):
         if format is None:
-            format = "%Y-%m-%d %H:%M:%S"
-        self.format = format
+            if not settings.DATETIME_INPUT_FORMATS:
+                formats = ("%Y-%m-%d %H:%M:%S",)
+            else:
+                formats = settings.DATETIME_INPUT_FORMATS
+        else:
+            formats = (format,)
+        self.formats = formats
 
     def clean(self, value):
         if not value:
             return None
-        return datetime.strptime(value, self.format)
+        for format in self.formats:
+            try:
+                return datetime.strptime(value, format)
+            except (ValueError, TypeError):
+                continue
+        raise ValueError("Enter a valid date/time.")
 
     def render(self, value):
-        return value.strftime(self.format)
+        if not value:
+            return ""
+        return value.strftime(self.formats[0])
 
 
 class ForeignKeyWidget(Widget):
     """
-    Widget for ``ForeignKey`` model field that represent ForeignKey as
-    integer value.
+    Widget for ``ForeignKey`` which looks up a related model.
 
-    Requires a positional argument: the class to which the field is related.
+    The lookup field defaults to using the primary key (``pk``), but
+    can be customised to use any field on the related model.
+
+    e.g. To use a lookup field other than ``pk``, rather than specifying a
+    field in your Resource as ``class Meta: fields = ('author__name', ...)``,
+    you would specify it in your Resource like so:
+
+        class BookResource(resources.ModelResource):
+            author = fields.Field(column_name='author', attribute='author', \
+                widget=ForeignKeyWidget(Author, 'name'))
+            class Meta: fields = ('author', ...)
+
+    This will allow you to use "natural keys" for both import and export.
+
+    Parameters:
+        ``model`` should be the Model instance for this ForeignKey (required).
+        ``field`` should be the lookup field on the related model.
     """
-
-    def __init__(self, model, *args, **kwargs):
+    def __init__(self, model, field='pk', *args, **kwargs):
         self.model = model
+        self.field = field
         super(ForeignKeyWidget, self).__init__(*args, **kwargs)
 
     def clean(self, value):
-        pk = super(ForeignKeyWidget, self).clean(value)
-        return self.model.objects.get(pk=pk) if pk else None
+        val = super(ForeignKeyWidget, self).clean(value)
+        return self.model.objects.get(**{self.field: val}) if val else None
 
     def render(self, value):
         if value is None:
             return ""
-        return value.pk
+        return getattr(value, self.field)
 
 
 class ManyToManyWidget(Widget):
@@ -183,5 +230,5 @@ class ManyToManyWidget(Widget):
         })
 
     def render(self, value):
-        ids = [str(getattr(obj, self.field)) for obj in value.all()]
+        ids = [smart_text(getattr(obj, self.field)) for obj in value.all()]
         return self.separator.join(ids)

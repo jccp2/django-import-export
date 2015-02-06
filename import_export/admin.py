@@ -19,10 +19,11 @@ from .forms import (
     ImportForm,
     ConfirmImportForm,
     ExportForm,
-    )
+    export_action_form_factory,
+)
 from .resources import (
     modelresource_factory,
-    )
+)
 from .formats import base_formats
 from .results import RowResult
 
@@ -135,7 +136,7 @@ class ImportMixin(ImportExportMixinBase):
                 RowResult.IMPORT_TYPE_UPDATE: CHANGE,
                 RowResult.IMPORT_TYPE_DELETE: DELETION,
             }
-            content_type_id = ContentType.objects.get_for_model(self.model).pk
+            content_type_id=ContentType.objects.get_for_model(self.model).pk
             for row in result:
                 if row.import_type != row.IMPORT_TYPE_SKIP:
                     LogEntry.objects.log_action(
@@ -283,6 +284,15 @@ class ExportMixin(ImportExportMixinBase):
         except AttributeError:
             return cl.query_set
 
+    def get_export_data(self, file_format, queryset):
+        """
+        Returns file_format representation for given queryset.
+        """
+        resource_class = self.get_export_resource_class()
+        data = resource_class().export(queryset)
+        export_data = file_format.export_data(data)
+        return export_data
+
     def export_action(self, request, *args, **kwargs):
         formats = self.get_export_formats()
         form = ExportForm(formats, request.POST or None)
@@ -335,4 +345,64 @@ class ImportExportMixin(ImportMixin, ExportMixin):
 class ImportExportModelAdmin(ImportExportMixin, admin.ModelAdmin):
     """
     Subclass of ModelAdmin with import/export functionality.
+    """
+
+
+class ExportActionModelAdmin(ExportMixin, admin.ModelAdmin):
+    """
+    Subclass of ModelAdmin with export functionality implemented as an
+    admin action.
+    """
+
+    # Don't use custom change list template.
+    change_list_template = None
+
+    def __init__(self, *args, **kwargs):
+        """
+        Adds a custom action form initialized with the available export
+        formats.
+        """
+        choices = []
+        formats = self.get_export_formats()
+        if formats:
+            choices.append(('', '---'))
+            for i, f in enumerate(formats):
+                choices.append((str(i), f().get_title()))
+
+        self.action_form = export_action_form_factory(choices)
+        super(ExportActionModelAdmin, self).__init__(*args, **kwargs)
+
+    def export_admin_action(self, request, queryset):
+        """
+        Exports the selected rows using file_format.
+        """
+        export_format = request.POST.get('file_format')
+
+        if not export_format:
+            messages.warning(request, _('You must select an export format.'))
+        else:
+            formats = self.get_export_formats()
+            file_format = formats[int(export_format)]()
+
+            export_data = self.get_export_data(file_format, queryset)
+            content_type = file_format.get_content_type()
+            # Django 1.7 uses the content_type kwarg instead of mimetype
+            try:
+                response = HttpResponse(export_data, content_type=content_type)
+            except TypeError:
+                response = HttpResponse(export_data, mimetype=content_type)
+            response['Content-Disposition'] = 'attachment; filename=%s' % (
+                self.get_export_filename(file_format),
+            )
+            return response
+    export_admin_action.short_description = _(
+        'Export selected %(verbose_name_plural)s')
+
+    actions = [export_admin_action]
+
+
+class ImportExportActionModelAdmin(ImportMixin, ExportActionModelAdmin):
+    """
+    Subclass of ExportActionModelAdmin with import/export functionality.
+    Export functionality is implemented as an admin action.
     """
